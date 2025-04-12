@@ -1,5 +1,6 @@
 import sys, pygame
 from enum import Enum
+import socket, select
 
 START_POS = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
@@ -93,6 +94,61 @@ class Game:
                 rect = rect.move(cell_size[0] * j, cell_size[1] * i)
                 screen.blit(sprite, rect)
 
+    def move_piece(self, move: str) -> None:
+
+        if len(move) != 4:
+            raise Exception("Incorrect move", move)
+
+        src_r, src_f = self.decode_alg(move[0:2])
+        dst_r, dst_f = self.decode_alg(move[2:4])
+
+        if self.board[src_r][src_f] == Piece.NONE:
+            raise Exception("Cannot move a NULL piece", move)
+
+        self.board[dst_r][dst_f] = self.board[src_r][src_f]
+        self.board[src_r][src_f] = Piece.NONE
+
+    @staticmethod
+    def decode_alg(alg: str) -> (int, int):
+        if len(alg) != 2:
+            raise Exception("Incorrect length of algebraic position", alg)
+
+        file = ord(alg[0]) - ord('a')
+        rank = 8 - int(alg[1])
+
+        if file < 0 or file >= 8 or rank < 0 or rank >= 8:
+            raise Exception("Incorrect position", alg)
+
+        return (rank, file)
+
+def read(socket) -> str:
+
+    buffer = bytearray(3)
+    chunks = memoryview(buffer)
+    total_recd = 0
+
+    while total_recd < 3:
+        bytes_recd = sock.recv_into(chunks[total_recd:], min(3 - total_recd, 3))
+        if bytes_recd == 0:
+            raise Exception("Socket connection broken")
+
+        total_recd += bytes_recd
+
+    bytes_expect = int(chunks[:total_recd])
+
+    buffer = bytearray(bytes_expect)
+    chunks = memoryview(buffer)
+    total_recd = 0
+
+    while total_recd < bytes_expect:
+        bytes_recd = sock.recv_into(chunks[total_recd:], min(bytes_expect - total_recd, bytes_expect))
+        if bytes_recd == 0:
+            raise Exception("Socket connection broken")
+
+        total_recd += bytes_recd
+
+    return str(chunks[:total_recd], encoding="ascii").strip()
+
 
 pygame.init()
 
@@ -111,6 +167,9 @@ color_light = (240, 217, 181)
 game = Game()
 # game = Game("8/pp2bp2/2k5/3p4/P4pQ1/1K6/RP1r4/2r5 w - - 8 40")
 
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.connect(("127.0.0.1", 42069))
+
 while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -126,6 +185,13 @@ while running:
 
     pygame.display.flip()
 
+    ready_read, _, _ = select.select([sock], [], [], 0.008)
+    if len(ready_read) > 0:
+        move = read(sock)
+
+        game.move_piece(move)
+
     dt = clock.tick(60) / 1000
 
+sock.close()
 pygame.quit()
