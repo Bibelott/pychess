@@ -1,0 +1,1 @@
+The piece set is ['Celtic' by Maurizio Monge](https://github.com/maurimo/chess-art) licensed under the [MIT License](https://github.com/maurimo/chess-art/blob/main/LICENSE)
