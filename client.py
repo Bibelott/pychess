@@ -26,10 +26,11 @@ class Piece(Enum):
 class CloseException(Exception):
     pass
 
-
 class Game:
 
-    def __init__(self, FEN: str = START_POS) -> None:
+    def __init__(self, sock: socket.socket, FEN: str = START_POS) -> None:
+        self.sock = sock
+
         self.board_size = screen_size
         self.cell_size = (self.board_size[0] / 8, self.board_size[1] / 8)
 
@@ -93,9 +94,6 @@ class Game:
 
     def start(self) -> None:
         self.in_progress = True
-
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.connect(("127.0.0.1", 42069))
 
         to_send = deque([])
 
@@ -279,8 +277,20 @@ clock = pygame.time.Clock()
 running = True
 dt = 0
 
-game = Game()
-# game = Game("8/pp2bp2/2k5/3p4/P4pQ1/1K6/RP1r4/2r5 w - - 8 40")
+try:
+    host = sys.argv[1]
+except IndexError:
+    host = "127.0.0.1"
+
+try:
+    port = int(sys.argv[2])
+except IndexError:
+    port = 40000
+
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.connect((host, port))
+
+game = Game(sock)
 
 try:
     game.start()
