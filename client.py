@@ -2,7 +2,7 @@ import sys, pygame
 from enum import Enum
 import socket, select
 from collections import deque
-import math
+import math, random
 
 START_POS = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
@@ -38,6 +38,9 @@ class Game:
         self.color_light = (240, 217, 181)
 
         self.board: list[list[Piece]] = []
+
+        self.white = False
+        self.spectator = False
 
         rank: list[Piece] = []
         for i, p in enumerate(FEN):
@@ -92,12 +95,43 @@ class Game:
             img = pygame.transform.scale(svg, self.cell_size).convert_alpha()
             self.sprites[piece.value] = img
 
+    def __del__(self):
+        self.sock.close()
+
     def start(self) -> None:
+        init_msg = self.read_socket()
+
+        if init_msg == "wbs":
+            resp = random.choice("wb")
+            self.white = (resp == "w")
+            self.write_socket(resp)
+
+        elif init_msg == "ws":
+            self.white = True
+            self.write_socket("w")
+
+        elif init_msg == "bs":
+            self.white = False
+            self.write_socket("b")
+
+        else:
+            self.spectator = True
+            self.write_socket("s")
+
+        init_msg = self.read_socket()
+
+        if init_msg == "initfail":
+            raise Exception("Failed to initialize connection")
+        
+        if init_msg != "initok":
+            raise Exception("Unknown initialization message")
+
         self.in_progress = True
 
         to_send = deque([])
 
         dragging = None
+        move_orig = None
 
         while self.in_progress:
             for event in pygame.event.get():
@@ -109,7 +143,7 @@ class Game:
                         continue
 
                     x, y = math.floor(event.pos[0] / self.cell_size[0]), math.floor(event.pos[1] / self.cell_size[1])
-                    piece = self.board[y][x]
+                    piece = self.get_piece(y, x)
 
                     if piece == Piece.NONE:
                         continue
@@ -121,22 +155,24 @@ class Game:
 
                     dragging = (piece, rect, (x, y))
 
-                    self.board[y][x] = Piece.NONE
+                    self.del_piece(y, x)
 
                 if event.type == pygame.MOUSEBUTTONUP:
                     if dragging is None:
                         continue
                     
-                    piece, rect, (orig_x, orig_y) = dragging
-                    
+                    piece, rect, (orig_x, orig_y)  = dragging
+
                     if event.pos[0] >= self.board_size[0] or event.pos[0] < 0 or event.pos[1] >= self.board_size[1] or event.pos[1] < 0:
-                        self.board[orig_y][orig_x] = piece
+                        self.set_piece(orig_y, orig_x, piece)
 
                     else:
                         x, y = math.floor(event.pos[0] / self.cell_size[0]), math.floor(event.pos[1] / self.cell_size[1])
                         if x != orig_x or y != orig_y:
                             to_send.append(self.encode_move(orig_x, orig_y, x, y))
-                        self.board[y][x] = piece
+                        self.set_piece(y, x, piece)
+
+                    move_orig = (piece, (orig_x, orig_y), (x, y))
 
                     dragging = None
 
@@ -158,9 +194,16 @@ class Game:
 
             ready_read, ready_write, _ = select.select([self.sock], [self.sock], [], 0.008)
             if len(ready_read) > 0:
-                move = self.read_socket()
+                msg = self.read_socket()
 
-                game.move_piece(move)
+                if msg == "ok":
+                    pass
+                elif msg == "no":
+                    piece, (orig_x, orig_y), (x, y) = move_orig
+                    self.del_piece(y, x)
+                    self.set_piece(orig_y, orig_x, piece)
+                else:
+                    self.move_piece(msg)
 
             elif len(ready_write) > 0 and len(to_send) > 0:
                 self.write_socket(to_send.popleft())
@@ -173,7 +216,7 @@ class Game:
 
         for i in range(8):
             for j in range(8):
-                piece = self.board[i][j]
+                piece = self.get_piece(i, j)
 
                 if piece == Piece.NONE:
                     continue
@@ -183,6 +226,19 @@ class Game:
                 rect = rect.move(self.cell_size[0] * j, self.cell_size[1] * i)
                 screen.blit(sprite, rect)
 
+    def get_piece(self, y: int, x: int) -> Piece:
+        return self.board[y][x] if self.white else self.board[7-y][x]
+
+    def del_piece(self, y: int, x: int) -> None:
+        if not self.white:
+            y = 7 - y
+        self.board[y][x] = Piece.NONE
+
+    def set_piece(self, y: int, x: int, piece: Piece) -> None:
+        if not self.white:
+            y = 7 - y
+        self.board[y][x] = piece
+
     def move_piece(self, move: str) -> None:
 
         if len(move) != 4:
@@ -191,38 +247,35 @@ class Game:
         src_r, src_f = self.decode_alg(move[0:2])
         dst_r, dst_f = self.decode_alg(move[2:4])
 
-        if self.board[src_r][src_f] == Piece.NONE:
+        if self.get_piece(src_r, src_f) == Piece.NONE:
             raise Exception("Cannot move a NULL piece", move)
 
-        self.board[dst_r][dst_f] = self.board[src_r][src_f]
-        self.board[src_r][src_f] = Piece.NONE
+        self.set_piece(dst_r, dst_f, self.get_piece(src_r, src_f))
+        self.del_piece(src_r, src_f)
 
-    @classmethod
-    def encode_move(cls, orig_x: int, orig_y: int, new_x: int, new_y: int) -> str:
-        orig = cls.encode_alg(orig_x, orig_y)
-        new = cls.encode_alg(new_x, new_y)
+    def encode_move(self, orig_x: int, orig_y: int, new_x: int, new_y: int) -> str:
+        orig = self.encode_alg(orig_x, orig_y)
+        new = self.encode_alg(new_x, new_y)
         return "".join([orig, new])
 
-    @staticmethod
-    def decode_alg(alg: str) -> (int, int):
+    def decode_alg(self, alg: str) -> (int, int):
         if len(alg) != 2:
             raise Exception("Incorrect length of algebraic position", alg)
 
         file = ord(alg[0]) - ord('a')
-        rank = 8 - int(alg[1])
+        rank = (8 - int(alg[1])) if self.white else (int(alg[1]) - 1)
 
         if file < 0 or file >= 8 or rank < 0 or rank >= 8:
             raise Exception("Incorrect position", alg)
 
         return (rank, file)
 
-    @staticmethod
-    def encode_alg(x: int, y: int) -> str:
+    def encode_alg(self, x: int, y: int) -> str:
         if x >= 8 or x < 0 or y >= 8 or y < 0:
             raise Exception("Incorrect position", x, y)
 
         file = chr(ord('a') + x)
-        rank = str(8 - y)
+        rank = str((8 - y) if self.white else (y + 1))
 
         return "".join([file, rank])
 
@@ -280,7 +333,7 @@ dt = 0
 try:
     host = sys.argv[1]
 except IndexError:
-    host = "127.0.0.1"
+    host = "127.0.1.1"
 
 try:
     port = int(sys.argv[2])
