@@ -37,6 +37,7 @@ class Game:
 
         self.color_dark = (181, 136, 99)
         self.color_light = (240, 217, 181)
+        self.color_pos = (100, 109, 64)
 
         self.board: list[list[Piece]] = []
 
@@ -138,6 +139,8 @@ class Game:
 
         dragging = None
 
+        possible_moves = None
+
         if self.white and not self.spectator:
             self.my_turn = True
 
@@ -159,6 +162,9 @@ class Game:
                     if piece == Piece.NONE:
                         continue
 
+                    if (piece.value & 8) == (int(self.white) << 3):
+                        continue
+
                     sprite = self.sprites[piece.value]
                     rect = sprite.get_rect()
 
@@ -169,6 +175,8 @@ class Game:
                     self.origboard = copy.deepcopy(self.board)
 
                     self.del_piece(y, x)
+
+                    to_send.append("moves " + self.encode_alg(x, y))
 
                 if event.type == pygame.MOUSEBUTTONUP:
                     if dragging is None:
@@ -184,6 +192,7 @@ class Game:
                         if x != orig_x or y != orig_y:
                             to_send.append(self.encode_move(orig_x, orig_y, x, y))
                             self.moved = True
+                            possible_moves = None
                         self.set_piece(y, x, piece)
 
                     dragging = None
@@ -193,6 +202,15 @@ class Game:
             for i in range(8):
                 for j in range(8):
                     pygame.draw.rect(screen, self.color_light if (i + j) % 2 == 0 else self.color_dark, ((j * self.cell_size[1], i * self.cell_size[0]), self.cell_size))
+            
+            if possible_moves != None:
+                (origin, moves) = possible_moves
+                pygame.draw.rect(screen, self.color_pos, ((origin[1] * self.cell_size[1], origin[0] * self.cell_size[0]), self.cell_size))
+                for move in moves:
+                    if self.get_piece(move[0], move[1]) == Piece.NONE:
+                        pygame.draw.circle(screen, self.color_pos, ((move[1] + 0.5) * self.cell_size[1], (move[0] + 0.5) * self.cell_size[0]), self.cell_size[0] / 6)
+                    else:
+                        pygame.draw.circle(screen, self.color_pos, ((move[1] + 0.5) * self.cell_size[1], (move[0] + 0.5) * self.cell_size[0]), self.cell_size[0] / 2, round(self.cell_size[0] / 20))
 
             game.draw(screen)
 
@@ -211,10 +229,21 @@ class Game:
                     self.moved = False
                     self.my_turn = False
                     self.origboard = None
+                    possible_moves = None
                 elif msg == "no":
                     self.board = self.origboard
                     self.origboard = None
                     self.moved = False
+                    possible_moves = None
+                elif msg.startswith("moves "):
+                    moves: list[tuple[int, int]] = []
+                    origin = self.decode_alg(msg[6:8])
+                    for i in range(9, len(msg), 2):
+                        try:
+                            moves.append(self.decode_alg(msg[i:i+2]))
+                        except:
+                            continue
+                    possible_moves = (origin, moves)
                 else:
                     self.move_piece(msg)
                     if not self.spectator:
@@ -273,7 +302,7 @@ class Game:
         new = self.encode_alg(new_x, new_y)
         return "".join([orig, new])
 
-    def decode_alg(self, alg: str) -> (int, int):
+    def decode_alg(self, alg: str) -> tuple[int, int]:
         if len(alg) != 2:
             raise Exception("Incorrect length of algebraic position", alg)
 
