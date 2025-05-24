@@ -3,6 +3,7 @@ from enum import Enum
 import socket, select
 from collections import deque
 import math, random
+import copy
 
 START_POS = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
@@ -41,6 +42,10 @@ class Game:
 
         self.white = False
         self.spectator = False
+
+        self.moved = False
+
+        self.my_turn = False
 
         rank: list[Piece] = []
         for i, p in enumerate(FEN):
@@ -88,7 +93,7 @@ class Game:
                 case _:
                     rank.extend([Piece.NONE for _ in range(int(p))])
 
-        self.sprites: list[pygame.Surface] = [None for _ in range(15)]
+        self.sprites: list[pygame.Surface | None] = [None for _ in range(15)]
 
         for file, piece in [("wP", Piece.PAWN_W), ("wR", Piece.ROOK_W), ("wN", Piece.KNIGHT_W), ("wB", Piece.BISHOP_W), ("wQ", Piece.QUEEN_W), ("wK", Piece.KING_W), ("bP", Piece.PAWN_B), ("bR", Piece.ROOK_B), ("bN", Piece.KNIGHT_B), ("bB", Piece.BISHOP_B), ("bQ", Piece.QUEEN_B), ("bK", Piece.KING_B)]:
             svg = pygame.image.load(f"resources/{file}.png")
@@ -131,7 +136,9 @@ class Game:
         to_send = deque([])
 
         dragging = None
-        move_orig = None
+
+        if self.white:
+            self.my_turn = True
 
         while self.in_progress:
             for event in pygame.event.get():
@@ -139,6 +146,9 @@ class Game:
                     raise CloseException()
 
                 if event.type == pygame.MOUSEBUTTONDOWN:
+                    if self.moved or not self.my_turn:
+                        continue
+
                     if event.pos[0] > self.board_size[0] or event.pos[1] > self.board_size[1]:
                         continue
 
@@ -155,6 +165,8 @@ class Game:
 
                     dragging = (piece, rect, (x, y))
 
+                    self.origboard = copy.deepcopy(self.board)
+
                     self.del_piece(y, x)
 
                 if event.type == pygame.MOUSEBUTTONUP:
@@ -170,12 +182,10 @@ class Game:
                         x, y = math.floor(event.pos[0] / self.cell_size[0]), math.floor(event.pos[1] / self.cell_size[1])
                         if x != orig_x or y != orig_y:
                             to_send.append(self.encode_move(orig_x, orig_y, x, y))
+                            self.moved = True
                         self.set_piece(y, x, piece)
 
-                    move_orig = (piece, (orig_x, orig_y), (x, y))
-
                     dragging = None
-
 
             screen.fill("darkgreen")
 
@@ -197,13 +207,16 @@ class Game:
                 msg = self.read_socket()
 
                 if msg == "ok":
-                    pass
+                    self.moved = False
+                    self.my_turn = False
+                    self.origboard = None
                 elif msg == "no":
-                    piece, (orig_x, orig_y), (x, y) = move_orig
-                    self.del_piece(y, x)
-                    self.set_piece(orig_y, orig_x, piece)
+                    self.board = self.origboard
+                    self.origboard = None
+                    self.moved = False
                 else:
                     self.move_piece(msg)
+                    self.my_turn = True
 
             elif len(ready_write) > 0 and len(to_send) > 0:
                 self.write_socket(to_send.popleft())
