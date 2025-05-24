@@ -121,6 +121,7 @@ class Game:
 
         else:
             self.spectator = True
+            self.white = True
             self.write_socket("s")
 
         init_msg = self.read_socket()
@@ -137,7 +138,7 @@ class Game:
 
         dragging = None
 
-        if self.white:
+        if self.white and not self.spectator:
             self.my_turn = True
 
         while self.in_progress:
@@ -216,7 +217,8 @@ class Game:
                     self.moved = False
                 else:
                     self.move_piece(msg)
-                    self.my_turn = True
+                    if not self.spectator:
+                        self.my_turn = True
 
             elif len(ready_write) > 0 and len(to_send) > 0:
                 self.write_socket(to_send.popleft())
