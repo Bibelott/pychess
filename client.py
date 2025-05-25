@@ -249,6 +249,8 @@ class Game:
                 msg = self.read_socket()
 
                 if msg.startswith("ok"):
+                    self.checked_opp = False
+                    self.checked_me = False
                     self.moved = False
                     self.my_turn = False
                     self.origboard = None
@@ -271,6 +273,8 @@ class Game:
                     possible_moves = (origin, moves)
                 else:
                     self.move_piece(msg[0:4])
+                    self.checked_me = False
+                    self.checked_opp = False
                     if msg[-1] == '+':
                         self.checked_me = True
                     if not self.spectator:
