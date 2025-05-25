@@ -47,6 +47,8 @@ class Game:
 
         self.moved = False
 
+        self.possible_moves = None
+
         self.my_turn = False
 
         self.checked_me = False
@@ -147,8 +149,6 @@ class Game:
 
         dragging = None
 
-        possible_moves = None
-
         if self.white and not self.spectator:
             self.my_turn = True
 
@@ -197,44 +197,19 @@ class Game:
 
                     else:
                         x, y = math.floor(event.pos[0] / self.cell_size[0]), math.floor(event.pos[1] / self.cell_size[1])
-                        if possible_moves != None and (y, x) not in possible_moves[1]:
+                        if self.possible_moves != None and (y, x) not in self.possible_moves[1]:
                             (x, y) = (orig_x, orig_y)
 
                         if x != orig_x or y != orig_y:
                             to_send.append(self.encode_move(orig_x, orig_y, x, y))
                             self.moved = True
-                            possible_moves = None
+                            self.possible_moves = None
                         self.set_piece(y, x, piece)
 
                     dragging = None
 
             screen.fill("darkgreen")
-
-            for i in range(8):
-                for j in range(8):
-                    pygame.draw.rect(screen, self.color_light if (i + j) % 2 == 0 else self.color_dark, ((j * self.cell_size[1], i * self.cell_size[0]), self.cell_size))
             
-            if possible_moves != None:
-                (origin, moves) = possible_moves
-                pygame.draw.rect(screen, self.color_pos, ((origin[1] * self.cell_size[1], origin[0] * self.cell_size[0]), self.cell_size))
-                for move in moves:
-                    if self.get_piece(move[0], move[1]) == Piece.NONE:
-                        pygame.draw.circle(screen, self.color_pos, ((move[1] + 0.5) * self.cell_size[1], (move[0] + 0.5) * self.cell_size[0]), self.cell_size[0] / 6)
-                    else:
-                        pygame.draw.circle(screen, self.color_pos, ((move[1] + 0.5) * self.cell_size[1], (move[0] + 0.5) * self.cell_size[0]), self.cell_size[0] / 2, round(self.cell_size[0] / 20))
-
-            if self.checked_me:
-                for r in range(8):
-                    for f in range(8):
-                        if self.get_piece(r, f) == Piece(Piece.KING_W.value | ((1-int(self.white)) << 3)):
-                            screen.blit(self.check_circle, (f * self.cell_size[0], r * self.cell_size[1]))
-
-            if self.checked_opp:
-                for r in range(8):
-                    for f in range(8):
-                        if self.get_piece(r, f) == Piece(Piece.KING_W.value | (int(self.white) << 3)):
-                            screen.blit(self.check_circle, (f * self.cell_size[0], r * self.cell_size[1]))
-
             game.draw(screen)
 
             if dragging is not None:
@@ -254,14 +229,14 @@ class Game:
                     self.moved = False
                     self.my_turn = False
                     self.origboard = None
-                    possible_moves = None
-                    if msg[-1] == '+':
+                    self.possible_moves = None
+                    if msg[-1] == '+' or msg[-1] == '#':
                         self.checked_opp = True
                 elif msg == "no":
                     self.board = self.origboard
                     self.origboard = None
                     self.moved = False
-                    possible_moves = None
+                    self.possible_moves = None
                 elif msg.startswith("moves "):
                     moves: list[tuple[int, int]] = []
                     origin = self.decode_alg(msg[6:8])
@@ -270,7 +245,7 @@ class Game:
                             moves.append(self.decode_alg(msg[i:i+2]))
                         except:
                             continue
-                    possible_moves = (origin, moves)
+                    self.possible_moves = (origin, moves)
                 elif msg.startswith("end "):
                     print(msg[4:])
                     self.in_progress = False
@@ -279,7 +254,7 @@ class Game:
                     self.move_piece(msg[0:4])
                     self.checked_me = False
                     self.checked_opp = False
-                    if msg[-1] == '+':
+                    if msg[-1] == '+' or msg[-1] == '#':
                         self.checked_me = True
                     if not self.spectator:
                         self.my_turn = True
@@ -292,13 +267,32 @@ class Game:
         self.sock.close()
 
     def draw(self, surface: pygame.Surface) -> None:
-
         for i in range(8):
             for j in range(8):
+                coords = (j * self.cell_size[1], i * self.cell_size[0])
+                pygame.draw.rect(surface, self.color_light if (i + j) % 2 == 0 else self.color_dark, (coords, self.cell_size))
+
                 piece = self.get_piece(i, j)
+
+                if self.possible_moves != None:
+                    if (i, j) == self.possible_moves[0]:
+                        pygame.draw.rect(screen, self.color_pos, (coords, self.cell_size))
+                    elif (i, j) in self.possible_moves[1]:
+                        if piece == Piece.NONE:
+                            pygame.draw.circle(screen, self.color_pos, (coords[0] + self.cell_size[1] / 2, coords[1] + self.cell_size[0] / 2), self.cell_size[0] / 6)
+                        else:
+                            pygame.draw.circle(screen, self.color_pos, (coords[0] + self.cell_size[1] / 2, coords[1] + self.cell_size[0] / 2), self.cell_size[0] / 2, round(self.cell_size[0] / 20))
 
                 if piece == Piece.NONE:
                     continue
+
+                if self.checked_me:
+                    if piece == Piece(Piece.KING_W.value | ((1-int(self.white)) << 3)):
+                        surface.blit(self.check_circle, coords)
+
+                if self.checked_opp:
+                    if piece == Piece(Piece.KING_W.value | (int(self.white) << 3)):
+                        surface.blit(self.check_circle, coords)
 
                 sprite = self.sprites[piece.value]
                 rect = sprite.get_rect()
@@ -433,6 +427,10 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+
+    game.draw(screen)
+
+    pygame.display.flip()
 
     dt = clock.tick(60) / 1000
 
