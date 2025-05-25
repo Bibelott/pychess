@@ -271,6 +271,10 @@ class Game:
                         except:
                             continue
                     possible_moves = (origin, moves)
+                elif msg.startswith("end "):
+                    print(msg[4:])
+                    self.in_progress = False
+                    continue
                 else:
                     self.move_piece(msg[0:4])
                     self.checked_me = False
