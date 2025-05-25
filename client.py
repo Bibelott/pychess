@@ -207,8 +207,6 @@ class Game:
                         self.set_piece(y, x, piece)
 
                     dragging = None
-
-            screen.fill("darkgreen")
             
             game.draw(screen)
 
@@ -247,6 +245,7 @@ class Game:
                             continue
                     self.possible_moves = (origin, moves)
                 elif msg.startswith("end "):
+                    self.score = msg[4:]
                     print(msg[4:])
                     self.in_progress = False
                     continue
@@ -267,6 +266,8 @@ class Game:
         self.sock.close()
 
     def draw(self, surface: pygame.Surface) -> None:
+        surface.fill("darkgreen")
+
         for i in range(8):
             for j in range(8):
                 coords = (j * self.cell_size[1], i * self.cell_size[0])
@@ -396,6 +397,7 @@ class Game:
 
 
 pygame.init()
+pygame.font.init()
 
 screen_size = width, height = 800, 800
 screen = pygame.display.set_mode(screen_size)
@@ -423,15 +425,34 @@ try:
 except CloseException:
     running = False
 
+if running:
+    timer = 1.0
+    game_over_font = pygame.font.SysFont("Consolas", 32)
+    game_over_msg = "Game Over!"
+
+    if game.score == '1-0':
+        game_over_msg = "You Won!" if game.white else "You Lost!"
+    elif game.score == '0-1':
+        game_over_msg = "You Lost!" if game.white else "You Won!"
+    elif game.score == '1/2-1/2':
+        game_over_msg = "Draw!"
+
+    game_over = game_over_font.render(game_over_msg, True, (255, 255, 255), (0, 0, 0))
+
 while running:
     for event in pygame.event.get():
-        if event.type == pygame.QUIT:
+        if event.type == pygame.QUIT or event.type == pygame.KEYDOWN:
             running = False
 
     game.draw(screen)
+    if timer <= 0:
+        go_rect = game_over.get_rect()
+        screen.blit(game_over, (width / 2 - go_rect.width / 2, height / 2 - go_rect.height / 2))
 
     pygame.display.flip()
 
     dt = clock.tick(60) / 1000
+    if timer > 0:
+        timer -= dt
 
 pygame.quit()
