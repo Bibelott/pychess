@@ -189,6 +189,9 @@ class Game:
 
                     else:
                         x, y = math.floor(event.pos[0] / self.cell_size[0]), math.floor(event.pos[1] / self.cell_size[1])
+                        if possible_moves != None and (y, x) not in possible_moves[1]:
+                            (x, y) = (orig_x, orig_y)
+
                         if x != orig_x or y != orig_y:
                             to_send.append(self.encode_move(orig_x, orig_y, x, y))
                             self.moved = True
