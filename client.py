@@ -427,7 +427,7 @@ except CloseException:
 
 if running:
     timer = 1.0
-    game_over_font = pygame.font.SysFont("Consolas", 32)
+    game_over_font = pygame.font.SysFont("Inconsolata", 50)
     game_over_msg = "Game Over!"
 
     if game.score == '1-0':
