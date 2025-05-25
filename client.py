@@ -38,6 +38,7 @@ class Game:
         self.color_dark = (181, 136, 99)
         self.color_light = (240, 217, 181)
         self.color_pos = (100, 109, 64)
+        self.color_check = (240, 20, 20, 180)
 
         self.board: list[list[Piece]] = []
 
@@ -47,6 +48,9 @@ class Game:
         self.moved = False
 
         self.my_turn = False
+
+        self.checked_me = False
+        self.checked_opp = False
 
         rank: list[Piece] = []
         for i, p in enumerate(FEN):
@@ -100,6 +104,10 @@ class Game:
             svg = pygame.image.load(f"resources/{file}.png")
             img = pygame.transform.scale(svg, self.cell_size).convert_alpha()
             self.sprites[piece.value] = img
+
+        self.check_circle = pygame.Surface(self.cell_size, pygame.SRCALPHA)
+        self.check_circle.fill((0, 0, 0, 0))
+        pygame.draw.circle(self.check_circle, self.color_check, (self.cell_size[0] / 2, self.cell_size[1] / 2), self.cell_size[0] / 2)
 
     def __del__(self):
         self.sock.close()
@@ -215,6 +223,18 @@ class Game:
                     else:
                         pygame.draw.circle(screen, self.color_pos, ((move[1] + 0.5) * self.cell_size[1], (move[0] + 0.5) * self.cell_size[0]), self.cell_size[0] / 2, round(self.cell_size[0] / 20))
 
+            if self.checked_me:
+                for r in range(8):
+                    for f in range(8):
+                        if self.get_piece(r, f) == Piece(Piece.KING_W.value | ((1-int(self.white)) << 3)):
+                            screen.blit(self.check_circle, (f * self.cell_size[0], r * self.cell_size[1]))
+
+            if self.checked_opp:
+                for r in range(8):
+                    for f in range(8):
+                        if self.get_piece(r, f) == Piece(Piece.KING_W.value | (int(self.white) << 3)):
+                            screen.blit(self.check_circle, (f * self.cell_size[0], r * self.cell_size[1]))
+
             game.draw(screen)
 
             if dragging is not None:
@@ -228,11 +248,13 @@ class Game:
             if len(ready_read) > 0:
                 msg = self.read_socket()
 
-                if msg == "ok":
+                if msg.startswith("ok"):
                     self.moved = False
                     self.my_turn = False
                     self.origboard = None
                     possible_moves = None
+                    if msg[-1] == '+':
+                        self.checked_opp = True
                 elif msg == "no":
                     self.board = self.origboard
                     self.origboard = None
@@ -248,7 +270,9 @@ class Game:
                             continue
                     possible_moves = (origin, moves)
                 else:
-                    self.move_piece(msg)
+                    self.move_piece(msg[0:4])
+                    if msg[-1] == '+':
+                        self.checked_me = True
                     if not self.spectator:
                         self.my_turn = True
 
@@ -271,7 +295,7 @@ class Game:
                 sprite = self.sprites[piece.value]
                 rect = sprite.get_rect()
                 rect = rect.move(self.cell_size[0] * j, self.cell_size[1] * i)
-                screen.blit(sprite, rect)
+                surface.blit(sprite, rect)
 
     def get_piece(self, y: int, x: int) -> Piece:
         return self.board[y][x] if self.white else self.board[7-y][x]
