@@ -49,6 +49,8 @@ class Game:
 
         self.possible_moves = None
 
+        self.en_passant_tgt = None
+
         self.my_turn = False
 
         self.checked_me = False
@@ -204,6 +206,18 @@ class Game:
                             to_send.append(self.encode_move(orig_x, orig_y, x, y))
                             self.moved = True
                             self.possible_moves = None
+
+                            if self.translate_coords(y, x) == self.en_passant_tgt:
+                                if y == 5:
+                                    self.del_piece(4, x)
+                                else:
+                                    self.del_piece(3, x)
+
+                            self.en_passant_tgt = None
+
+                            if piece in [Piece.PAWN_W, Piece.PAWN_B] and abs(y - orig_y) == 2:
+                                self.en_passant_tgt = self.translate_coords(round((y + orig_y)/2), x)
+
                         self.set_piece(y, x, piece)
 
                     dragging = None
@@ -279,7 +293,7 @@ class Game:
                     if (i, j) == self.possible_moves[0]:
                         pygame.draw.rect(screen, self.color_pos, (coords, self.cell_size))
                     elif (i, j) in self.possible_moves[1]:
-                        if piece == Piece.NONE:
+                        if piece == Piece.NONE and self.translate_coords(i, j) != self.en_passant_tgt:
                             pygame.draw.circle(screen, self.color_pos, (coords[0] + self.cell_size[1] / 2, coords[1] + self.cell_size[0] / 2), self.cell_size[0] / 6)
                         else:
                             pygame.draw.circle(screen, self.color_pos, (coords[0] + self.cell_size[1] / 2, coords[1] + self.cell_size[0] / 2), self.cell_size[0] / 2, round(self.cell_size[0] / 20))
@@ -299,6 +313,9 @@ class Game:
                 rect = sprite.get_rect()
                 rect = rect.move(self.cell_size[0] * j, self.cell_size[1] * i)
                 surface.blit(sprite, rect)
+
+    def translate_coords(self, y: int, x: int) -> tuple[int, int]:
+        return (y, x) if self.white else (7-y, x)
 
     def get_piece(self, y: int, x: int) -> Piece:
         return self.board[y][x] if self.white else self.board[7-y][x]
@@ -323,6 +340,17 @@ class Game:
 
         if self.get_piece(src_r, src_f) == Piece.NONE:
             raise Exception("Cannot move a NULL piece", move)
+
+        if self.translate_coords(dst_r, dst_f) == self.en_passant_tgt:
+            if dst_r == 5:
+                self.del_piece(4, dst_f)
+            else:
+                self.del_piece(3, dst_f)
+
+        self.en_passant_tgt = None
+
+        if self.get_piece(src_r, src_f) in [Piece.PAWN_W, Piece.PAWN_B] and abs(dst_r - src_r) == 2:
+            self.en_passant_tgt = self.translate_coords(round((dst_r + src_r)/2), src_f)
 
         self.set_piece(dst_r, dst_f, self.get_piece(src_r, src_f))
         self.del_piece(src_r, src_f)
