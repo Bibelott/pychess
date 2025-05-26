@@ -218,6 +218,14 @@ class Game:
                             if piece in [Piece.PAWN_W, Piece.PAWN_B] and abs(y - orig_y) == 2:
                                 self.en_passant_tgt = self.translate_coords(round((y + orig_y)/2), x)
 
+                            if piece in [Piece.KING_W, Piece.KING_B]:
+                                if x - orig_x == 2:
+                                    self.set_piece(orig_y, orig_x + 1, Piece(Piece.ROOK_W.value | (piece.value & 8)))
+                                    self.del_piece(orig_y, 7)
+                                elif x - orig_x == -2:
+                                    self.set_piece(orig_y, orig_x - 1, Piece(Piece.ROOK_W.value | (piece.value & 8)))
+                                    self.del_piece(orig_y, 0)
+
                         self.set_piece(y, x, piece)
 
                     dragging = None
@@ -349,10 +357,20 @@ class Game:
 
         self.en_passant_tgt = None
 
-        if self.get_piece(src_r, src_f) in [Piece.PAWN_W, Piece.PAWN_B] and abs(dst_r - src_r) == 2:
+        piece = self.get_piece(src_r, src_f)
+
+        if piece in [Piece.PAWN_W, Piece.PAWN_B] and abs(dst_r - src_r) == 2:
             self.en_passant_tgt = self.translate_coords(round((dst_r + src_r)/2), src_f)
 
-        self.set_piece(dst_r, dst_f, self.get_piece(src_r, src_f))
+        if piece in [Piece.KING_W, Piece.KING_B]:
+            if dst_f - src_f == 2:
+                self.set_piece(src_r, src_f + 1, Piece(Piece.ROOK_W.value | (piece.value & 8)))
+                self.del_piece(src_r, 7)
+            elif dst_f - src_f == -2:
+                self.set_piece(src_r, src_f - 1, Piece(Piece.ROOK_W.value | (piece.value & 8)))
+                self.del_piece(src_r, 0)
+
+        self.set_piece(dst_r, dst_f, piece)
         self.del_piece(src_r, src_f)
 
     def encode_move(self, orig_x: int, orig_y: int, new_x: int, new_y: int) -> str:
