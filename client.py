@@ -109,6 +109,25 @@ class Game:
             img = pygame.transform.scale(svg, self.cell_size).convert_alpha()
             self.sprites[piece.value] = img
 
+        self.prom_select_w = pygame.Surface((2 * self.cell_size[0], 2 * self.cell_size[1]))
+        self.prom_select_w.fill((255, 255, 255))
+        self.prom_select_w.blit(self.sprites[Piece.QUEEN_W.value], (0, 0))
+        self.prom_select_w.blit(self.sprites[Piece.KNIGHT_W.value], (self.cell_size[1], 0))
+        self.prom_select_w.blit(self.sprites[Piece.ROOK_W.value], (0, self.cell_size[0]))
+        self.prom_select_w.blit(self.sprites[Piece.BISHOP_W.value], (self.cell_size[1], self.cell_size[0]))
+        pygame.draw.rect(self.prom_select_w, (0, 0, 0), (0, 0, self.cell_size[0] * 2, self.cell_size[1] * 2), 1)
+
+        self.prom_select_b = pygame.Surface((2 * self.cell_size[0], 2 * self.cell_size[1]))
+        self.prom_select_b.fill((255, 255, 255))
+        self.prom_select_b.blit(self.sprites[Piece.QUEEN_B.value], (0, 0))
+        self.prom_select_b.blit(self.sprites[Piece.KNIGHT_B.value], (self.cell_size[1], 0))
+        self.prom_select_b.blit(self.sprites[Piece.ROOK_B.value], (0, self.cell_size[0]))
+        self.prom_select_b.blit(self.sprites[Piece.BISHOP_B.value], (self.cell_size[1], self.cell_size[0]))
+        pygame.draw.rect(self.prom_select_b, (0, 0, 0), (0, 0, self.cell_size[0] * 2, self.cell_size[1] * 2), 1)
+
+        self.prom_menu_coords = None
+        self.prom_move = None
+
         self.check_circle = pygame.Surface(self.cell_size, pygame.SRCALPHA)
         self.check_circle.fill((0, 0, 0, 0))
         pygame.draw.circle(self.check_circle, self.color_check, (self.cell_size[0] / 2, self.cell_size[1] / 2), self.cell_size[0] / 2)
@@ -160,6 +179,28 @@ class Game:
                     raise CloseException()
 
                 if event.type == pygame.MOUSEBUTTONDOWN:
+                    self.origboard = copy.deepcopy(self.board)
+
+                    if self.prom_menu_coords != None:
+                        if event.pos[0] < self.prom_menu_coords[0] or event.pos[0] > self.prom_menu_coords[0] + 2 * self.cell_size[0] or event.pos[1] < self.prom_menu_coords[1] or event.pos[1] > self.prom_menu_coords[1] + 2 * self.cell_size[1]:
+                            continue
+
+                        if event.pos[0] < self.prom_menu_coords[0] + self.cell_size[0] and event.pos[1] < self.prom_menu_coords[1] + self.cell_size[1]:
+                            prom = Piece.QUEEN_W if self.white else Piece.QUEEN_B
+                        elif event.pos[0] > self.prom_menu_coords[0] + self.cell_size[0] and event.pos[1] < self.prom_menu_coords[1] + self.cell_size[1]:
+                            prom = Piece.KNIGHT_W if self.white else Piece.KNIGHT_B
+                        elif event.pos[0] < self.prom_menu_coords[0] + self.cell_size[0] and event.pos[1] > self.prom_menu_coords[1] + self.cell_size[1]:
+                            prom = Piece.ROOK_W if self.white else Piece.ROOK_B
+                        elif event.pos[0] > self.prom_menu_coords[0] + self.cell_size[0] and event.pos[1] > self.prom_menu_coords[1] + self.cell_size[1]:
+                            prom = Piece.BISHOP_W if self.white else Piece.BISHOP_B
+
+                        orig_x, orig_y, x, y = self.prom_move
+                        to_send.append(self.encode_move(orig_x, orig_y, x, y, prom))
+
+                        self.set_piece(y, x, prom)
+
+                        self.prom_menu_coords = None
+                        continue
                     if self.moved or not self.my_turn:
                         continue
 
@@ -182,8 +223,6 @@ class Game:
 
                     dragging = (piece, rect, (x, y))
 
-                    self.origboard = copy.deepcopy(self.board)
-
                     self.del_piece(y, x)
 
                     to_send.append("moves " + self.encode_alg(x, y))
@@ -194,6 +233,8 @@ class Game:
                     
                     piece, rect, (orig_x, orig_y)  = dragging
 
+                    dragging = None
+
                     if event.pos[0] >= self.board_size[0] or event.pos[0] < 0 or event.pos[1] >= self.board_size[1] or event.pos[1] < 0:
                         self.set_piece(orig_y, orig_x, piece)
 
@@ -203,7 +244,19 @@ class Game:
                             (x, y) = (orig_x, orig_y)
 
                         if x != orig_x or y != orig_y:
-                            to_send.append(self.encode_move(orig_x, orig_y, x, y))
+                            if piece in [Piece.PAWN_W, Piece.PAWN_B] and y in [0, 7]:
+                                menu_x, menu_y = pygame.mouse.get_pos()
+
+                                if menu_x > screen_size[0] / 2:
+                                    menu_x -= self.cell_size[0] * 2
+                                if menu_y > screen_size[1] / 2:
+                                    menu_y -= self.cell_size[0] * 2
+
+                                self.prom_menu_coords = (menu_x, menu_y)
+                                self.prom_move = (orig_x, orig_y, x, y)
+
+                            if self.prom_menu_coords == None:
+                                to_send.append(self.encode_move(orig_x, orig_y, x, y))
                             self.moved = True
                             self.possible_moves = None
 
@@ -227,8 +280,6 @@ class Game:
                                     self.del_piece(orig_y, 0)
 
                         self.set_piece(y, x, piece)
-
-                    dragging = None
             
             game.draw(screen)
 
@@ -272,7 +323,7 @@ class Game:
                     self.in_progress = False
                     continue
                 else:
-                    self.move_piece(msg[0:4])
+                    self.move_piece(msg)
                     self.checked_me = False
                     self.checked_opp = False
                     if msg[-1] == '+' or msg[-1] == '#':
@@ -322,6 +373,10 @@ class Game:
                 rect = rect.move(self.cell_size[0] * j, self.cell_size[1] * i)
                 surface.blit(sprite, rect)
 
+        if self.prom_menu_coords != None:
+            prom_select = self.prom_select_w if self.white else self.prom_select_b
+            surface.blit(prom_select, self.prom_menu_coords)
+
     def translate_coords(self, y: int, x: int) -> tuple[int, int]:
         return (y, x) if self.white else (7-y, x)
 
@@ -340,7 +395,7 @@ class Game:
 
     def move_piece(self, move: str) -> None:
 
-        if len(move) != 4:
+        if len(move) < 4:
             raise Exception("Incorrect move", move)
 
         src_r, src_f = self.decode_alg(move[0:2])
@@ -370,13 +425,39 @@ class Game:
                 self.set_piece(src_r, src_f - 1, Piece(Piece.ROOK_W.value | (piece.value & 8)))
                 self.del_piece(src_r, 0)
 
+        if len(move) >= 6 and move[4] == '=':
+            prom = Piece.NONE
+            match move[5]:
+                case 'Q':
+                    prom = Piece.QUEEN_W
+                case 'N':
+                    prom = Piece.KNIGHT_W
+                case 'R':
+                    prom = Piece.ROOK_W
+                case 'B':
+                    prom = Piece.BISHOP_W
+
+            piece = Piece(prom.value | (piece.value & 8))
+
         self.set_piece(dst_r, dst_f, piece)
         self.del_piece(src_r, src_f)
 
-    def encode_move(self, orig_x: int, orig_y: int, new_x: int, new_y: int) -> str:
+    def encode_move(self, orig_x: int, orig_y: int, new_x: int, new_y: int, prom: Piece = Piece.NONE) -> str:
         orig = self.encode_alg(orig_x, orig_y)
         new = self.encode_alg(new_x, new_y)
-        return "".join([orig, new])
+
+        prom_str = ""
+        match prom:
+            case Piece.QUEEN_W | Piece.QUEEN_B:
+                prom_str = "=Q"
+            case Piece.KNIGHT_W | Piece.KNIGHT_B:
+                prom_str = "=N"
+            case Piece.ROOK_W | Piece.ROOK_B:
+                prom_str = "=R"
+            case Piece.BISHOP_W | Piece.BISHOP_B:
+                prom_str = "=B"
+
+        return "".join([orig, new, prom_str])
 
     def decode_alg(self, alg: str) -> tuple[int, int]:
         if len(alg) != 2:
