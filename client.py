@@ -543,7 +543,7 @@ dt = 0
 try:
     host = sys.argv[1]
 except IndexError:
-    host = "127.0.1.1"
+    host = "127.0.0.1"
 
 try:
     port = int(sys.argv[2])
