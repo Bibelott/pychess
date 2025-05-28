@@ -300,7 +300,11 @@ class Game:
 
             ready_read, ready_write, _ = select.select([self.sock], [self.sock], [], 0.008)
             if len(ready_read) > 0:
-                msg = self.read_socket()
+                try:
+                    msg = self.read_socket()
+                except:
+                    self.in_progress = False
+                    continue
 
                 if msg.startswith("ok"):
                     self.checked_opp = False
