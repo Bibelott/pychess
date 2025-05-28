@@ -187,8 +187,6 @@ class Game:
                     raise CloseException()
 
                 if event.type == pygame.MOUSEBUTTONDOWN:
-                    self.origboard = copy.deepcopy(self.board)
-
                     if self.prom_menu_coords != None:
                         if event.pos[0] < self.prom_menu_coords[0] or event.pos[0] > self.prom_menu_coords[0] + 2 * self.cell_size[0] or event.pos[1] < self.prom_menu_coords[1] or event.pos[1] > self.prom_menu_coords[1] + 2 * self.cell_size[1]:
                             continue
@@ -214,6 +212,8 @@ class Game:
 
                     if event.pos[0] > self.board_size[0] or event.pos[1] > self.board_size[1]:
                         continue
+
+                    self.origboard = copy.deepcopy(self.board)
 
                     x, y = math.floor(event.pos[0] / self.cell_size[0]), math.floor(event.pos[1] / self.cell_size[1])
                     piece = self.get_piece(y, x)
