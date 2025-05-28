@@ -1,6 +1,7 @@
 import tkinter as tk
 from multiprocessing import Process
 import client
+import sys
 import os
 if os.path.exists('server/server.py'):
     from server import server
@@ -63,6 +64,8 @@ if __name__ == '__main__':
 
     create_but = tk.Button(root, text="Create a new game", command=lambda: create_and_join(root, host.get(), port.get()))
     create_but.grid(row = 2, column = 1)
+    if 'server' not in sys.modules:
+        create_but['state'] = 'disable'
 
     root.mainloop()
 
