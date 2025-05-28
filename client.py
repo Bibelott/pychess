@@ -565,12 +565,21 @@ if running:
     game_over_font = pygame.font.SysFont("Inconsolata", 50)
     game_over_msg = "Game Over!"
 
-    if game.score == '1-0':
-        game_over_msg = "You Won!" if game.white else "You Lost!"
-    elif game.score == '0-1':
-        game_over_msg = "You Lost!" if game.white else "You Won!"
-    elif game.score == '1/2-1/2':
-        game_over_msg = "Draw!"
+    if game.spectator:
+        if game.score == '1-0':
+            game_over_msg = "White Won!"
+        elif game.score == '0-1':
+            game_over_msg = "Black Won!"
+        elif game.score == '1/2-1/2':
+            game_over_msg = "Draw!"
+    else:
+        if game.score == '1-0':
+            game_over_msg = "You Won!" if game.white else "You Lost!"
+        elif game.score == '0-1':
+            game_over_msg = "You Lost!" if game.white else "You Won!"
+        elif game.score == '1/2-1/2':
+            game_over_msg = "Draw!"
+    
 
     game_over = game_over_font.render(game_over_msg, True, (255, 255, 255), (0, 0, 0))
 
