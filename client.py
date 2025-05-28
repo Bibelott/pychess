@@ -29,10 +29,14 @@ class CloseException(Exception):
 
 class Game:
 
-    def __init__(self, sock: socket.socket) -> None:
+    def __init__(self, sock: socket.socket, screen: pygame.Surface, clock: pygame.time.Clock) -> None:
         self.sock = sock
+        self.clock = clock
 
-        self.board_size = screen_size
+        self.screen_size = screen.get_size()
+        self.screen = screen
+
+        self.board_size = self.screen_size
         self.cell_size = (self.board_size[0] / 8, self.board_size[1] / 8)
 
         self.color_dark = (181, 136, 99)
@@ -255,9 +259,9 @@ class Game:
                             if piece in [Piece.PAWN_W, Piece.PAWN_B] and y in [0, 7]:
                                 menu_x, menu_y = pygame.mouse.get_pos()
 
-                                if menu_x > screen_size[0] / 2:
+                                if menu_x > self.screen_size[0] / 2:
                                     menu_x -= self.cell_size[0] * 2
-                                if menu_y > screen_size[1] / 2:
+                                if menu_y > self.screen_size[1] / 2:
                                     menu_y -= self.cell_size[0] * 2
 
                                 self.prom_menu_coords = (menu_x, menu_y)
@@ -289,12 +293,12 @@ class Game:
 
                         self.set_piece(y, x, piece)
             
-            game.draw(screen)
+            self.draw(self.screen)
 
             if dragging is not None:
                 piece, rect, _ = dragging
                 rect.center = pygame.mouse.get_pos()
-                screen.blit(self.sprites[piece.value], rect)
+                self.screen.blit(self.sprites[piece.value], rect)
 
             pygame.display.flip()
 
@@ -346,7 +350,7 @@ class Game:
             elif len(ready_write) > 0 and len(to_send) > 0:
                 self.write_socket(to_send.popleft())
 
-            dt = clock.tick(60) / 1000
+            dt = self.clock.tick(60) / 1000
 
         self.sock.close()
 
@@ -362,12 +366,12 @@ class Game:
 
                 if self.possible_moves != None:
                     if (i, j) == self.possible_moves[0]:
-                        pygame.draw.rect(screen, self.color_pos, (coords, self.cell_size))
+                        pygame.draw.rect(surface, self.color_pos, (coords, self.cell_size))
                     elif (i, j) in self.possible_moves[1]:
                         if piece == Piece.NONE and self.translate_coords(i, j) != self.en_passant_tgt:
-                            pygame.draw.circle(screen, self.color_pos, (coords[0] + self.cell_size[1] / 2, coords[1] + self.cell_size[0] / 2), self.cell_size[0] / 6)
+                            pygame.draw.circle(surface, self.color_pos, (coords[0] + self.cell_size[1] / 2, coords[1] + self.cell_size[0] / 2), self.cell_size[0] / 6)
                         else:
-                            pygame.draw.circle(screen, self.color_pos, (coords[0] + self.cell_size[1] / 2, coords[1] + self.cell_size[0] / 2), self.cell_size[0] / 2, round(self.cell_size[0] / 20))
+                            pygame.draw.circle(surface, self.color_pos, (coords[0] + self.cell_size[1] / 2, coords[1] + self.cell_size[0] / 2), self.cell_size[0] / 2, round(self.cell_size[0] / 20))
 
                 if piece == Piece.NONE:
                     continue
@@ -534,73 +538,77 @@ class Game:
             
             total_sent += sent
 
+def run(host: str, port: int):
+    pygame.init()
+    pygame.font.init()
 
-pygame.init()
-pygame.font.init()
+    screen_size = width, height = 800, 800
+    screen = pygame.display.set_mode(screen_size)
+    clock = pygame.time.Clock()
+    running = True
+    dt = 0
 
-screen_size = width, height = 800, 800
-screen = pygame.display.set_mode(screen_size)
-clock = pygame.time.Clock()
-running = True
-dt = 0
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.connect((host, port))
 
-try:
-    host = sys.argv[1]
-except IndexError:
-    host = "127.0.0.1"
+    game = Game(sock, screen, clock)
 
-try:
-    port = int(sys.argv[2])
-except IndexError:
-    port = 40000
+    try:
+        game.start()
+    except CloseException:
+        running = False
 
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-sock.connect((host, port))
+    if running:
+        timer = 1.0
+        game_over_font = pygame.font.SysFont("Inconsolata", 50)
+        game_over_msg = "Game Over!"
 
-game = Game(sock)
+        if game.spectator:
+            if game.score == '1-0':
+                game_over_msg = "White Won!"
+            elif game.score == '0-1':
+                game_over_msg = "Black Won!"
+            elif game.score == '1/2-1/2':
+                game_over_msg = "Draw!"
+        else:
+            if game.score == '1-0':
+                game_over_msg = "You Won!" if game.white else "You Lost!"
+            elif game.score == '0-1':
+                game_over_msg = "You Lost!" if game.white else "You Won!"
+            elif game.score == '1/2-1/2':
+                game_over_msg = "Draw!"
+        
 
-try:
-    game.start()
-except CloseException:
-    running = False
+        game_over = game_over_font.render(game_over_msg, True, (255, 255, 255), (0, 0, 0))
 
-if running:
-    timer = 1.0
-    game_over_font = pygame.font.SysFont("Inconsolata", 50)
-    game_over_msg = "Game Over!"
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT or event.type == pygame.KEYDOWN:
+                running = False
 
-    if game.spectator:
-        if game.score == '1-0':
-            game_over_msg = "White Won!"
-        elif game.score == '0-1':
-            game_over_msg = "Black Won!"
-        elif game.score == '1/2-1/2':
-            game_over_msg = "Draw!"
-    else:
-        if game.score == '1-0':
-            game_over_msg = "You Won!" if game.white else "You Lost!"
-        elif game.score == '0-1':
-            game_over_msg = "You Lost!" if game.white else "You Won!"
-        elif game.score == '1/2-1/2':
-            game_over_msg = "Draw!"
-    
+        game.draw(screen)
+        if timer <= 0:
+            go_rect = game_over.get_rect()
+            screen.blit(game_over, (width / 2 - go_rect.width / 2, height / 2 - go_rect.height / 2))
 
-    game_over = game_over_font.render(game_over_msg, True, (255, 255, 255), (0, 0, 0))
+        pygame.display.flip()
 
-while running:
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT or event.type == pygame.KEYDOWN:
-            running = False
+        dt = clock.tick(60) / 1000
+        if timer > 0:
+            timer -= dt
 
-    game.draw(screen)
-    if timer <= 0:
-        go_rect = game_over.get_rect()
-        screen.blit(game_over, (width / 2 - go_rect.width / 2, height / 2 - go_rect.height / 2))
+    pygame.quit()
 
-    pygame.display.flip()
+if __name__ == '__main__':
+    try:
+        host = sys.argv[1]
+    except IndexError:
+        host = "127.0.0.1"
 
-    dt = clock.tick(60) / 1000
-    if timer > 0:
-        timer -= dt
+    try:
+        port = int(sys.argv[2])
+    except IndexError:
+        port = 40000
 
-pygame.quit()
+    run(host, port)
+
