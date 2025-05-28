@@ -29,7 +29,7 @@ class CloseException(Exception):
 
 class Game:
 
-    def __init__(self, sock: socket.socket, FEN: str = START_POS) -> None:
+    def __init__(self, sock: socket.socket) -> None:
         self.sock = sock
 
         self.board_size = screen_size
@@ -56,6 +56,43 @@ class Game:
         self.checked_me = False
         self.checked_opp = False
 
+        self.sync_board(START_POS)
+
+        self.sprites: list[pygame.Surface | None] = [None for _ in range(15)]
+
+        for file, piece in [("wP", Piece.PAWN_W), ("wR", Piece.ROOK_W), ("wN", Piece.KNIGHT_W), ("wB", Piece.BISHOP_W), ("wQ", Piece.QUEEN_W), ("wK", Piece.KING_W), ("bP", Piece.PAWN_B), ("bR", Piece.ROOK_B), ("bN", Piece.KNIGHT_B), ("bB", Piece.BISHOP_B), ("bQ", Piece.QUEEN_B), ("bK", Piece.KING_B)]:
+            svg = pygame.image.load(f"resources/{file}.png")
+            img = pygame.transform.scale(svg, self.cell_size).convert_alpha()
+            self.sprites[piece.value] = img
+
+        self.prom_select_w = pygame.Surface((2 * self.cell_size[0], 2 * self.cell_size[1]))
+        self.prom_select_w.fill((255, 255, 255))
+        self.prom_select_w.blit(self.sprites[Piece.QUEEN_W.value], (0, 0))
+        self.prom_select_w.blit(self.sprites[Piece.KNIGHT_W.value], (self.cell_size[1], 0))
+        self.prom_select_w.blit(self.sprites[Piece.ROOK_W.value], (0, self.cell_size[0]))
+        self.prom_select_w.blit(self.sprites[Piece.BISHOP_W.value], (self.cell_size[1], self.cell_size[0]))
+        pygame.draw.rect(self.prom_select_w, (0, 0, 0), (0, 0, self.cell_size[0] * 2, self.cell_size[1] * 2), 1)
+
+        self.prom_select_b = pygame.Surface((2 * self.cell_size[0], 2 * self.cell_size[1]))
+        self.prom_select_b.fill((255, 255, 255))
+        self.prom_select_b.blit(self.sprites[Piece.QUEEN_B.value], (0, 0))
+        self.prom_select_b.blit(self.sprites[Piece.KNIGHT_B.value], (self.cell_size[1], 0))
+        self.prom_select_b.blit(self.sprites[Piece.ROOK_B.value], (0, self.cell_size[0]))
+        self.prom_select_b.blit(self.sprites[Piece.BISHOP_B.value], (self.cell_size[1], self.cell_size[0]))
+        pygame.draw.rect(self.prom_select_b, (0, 0, 0), (0, 0, self.cell_size[0] * 2, self.cell_size[1] * 2), 1)
+
+        self.prom_menu_coords = None
+        self.prom_move = None
+
+        self.check_circle = pygame.Surface(self.cell_size, pygame.SRCALPHA)
+        self.check_circle.fill((0, 0, 0, 0))
+        pygame.draw.circle(self.check_circle, self.color_check, (self.cell_size[0] / 2, self.cell_size[1] / 2), self.cell_size[0] / 2)
+
+    def __del__(self):
+        self.sock.close()
+
+    def sync_board(self, FEN: str) -> None:
+        self.board = []
         rank: list[Piece] = []
         for i, p in enumerate(FEN):
             match p:
@@ -102,39 +139,6 @@ class Game:
                 case _:
                     rank.extend([Piece.NONE for _ in range(int(p))])
 
-        self.sprites: list[pygame.Surface | None] = [None for _ in range(15)]
-
-        for file, piece in [("wP", Piece.PAWN_W), ("wR", Piece.ROOK_W), ("wN", Piece.KNIGHT_W), ("wB", Piece.BISHOP_W), ("wQ", Piece.QUEEN_W), ("wK", Piece.KING_W), ("bP", Piece.PAWN_B), ("bR", Piece.ROOK_B), ("bN", Piece.KNIGHT_B), ("bB", Piece.BISHOP_B), ("bQ", Piece.QUEEN_B), ("bK", Piece.KING_B)]:
-            svg = pygame.image.load(f"resources/{file}.png")
-            img = pygame.transform.scale(svg, self.cell_size).convert_alpha()
-            self.sprites[piece.value] = img
-
-        self.prom_select_w = pygame.Surface((2 * self.cell_size[0], 2 * self.cell_size[1]))
-        self.prom_select_w.fill((255, 255, 255))
-        self.prom_select_w.blit(self.sprites[Piece.QUEEN_W.value], (0, 0))
-        self.prom_select_w.blit(self.sprites[Piece.KNIGHT_W.value], (self.cell_size[1], 0))
-        self.prom_select_w.blit(self.sprites[Piece.ROOK_W.value], (0, self.cell_size[0]))
-        self.prom_select_w.blit(self.sprites[Piece.BISHOP_W.value], (self.cell_size[1], self.cell_size[0]))
-        pygame.draw.rect(self.prom_select_w, (0, 0, 0), (0, 0, self.cell_size[0] * 2, self.cell_size[1] * 2), 1)
-
-        self.prom_select_b = pygame.Surface((2 * self.cell_size[0], 2 * self.cell_size[1]))
-        self.prom_select_b.fill((255, 255, 255))
-        self.prom_select_b.blit(self.sprites[Piece.QUEEN_B.value], (0, 0))
-        self.prom_select_b.blit(self.sprites[Piece.KNIGHT_B.value], (self.cell_size[1], 0))
-        self.prom_select_b.blit(self.sprites[Piece.ROOK_B.value], (0, self.cell_size[0]))
-        self.prom_select_b.blit(self.sprites[Piece.BISHOP_B.value], (self.cell_size[1], self.cell_size[0]))
-        pygame.draw.rect(self.prom_select_b, (0, 0, 0), (0, 0, self.cell_size[0] * 2, self.cell_size[1] * 2), 1)
-
-        self.prom_menu_coords = None
-        self.prom_move = None
-
-        self.check_circle = pygame.Surface(self.cell_size, pygame.SRCALPHA)
-        self.check_circle.fill((0, 0, 0, 0))
-        pygame.draw.circle(self.check_circle, self.color_check, (self.cell_size[0] / 2, self.cell_size[1] / 2), self.cell_size[0] / 2)
-
-    def __del__(self):
-        self.sock.close()
-
     def start(self) -> None:
         init_msg = self.read_socket()
 
@@ -156,6 +160,8 @@ class Game:
             self.white = True
             self.write_socket("s")
 
+        pos = self.read_socket()
+
         init_msg = self.read_socket()
 
         if init_msg == "initfail":
@@ -163,6 +169,8 @@ class Game:
         
         if init_msg != "initok":
             raise Exception("Unknown initialization message")
+
+        self.sync_board(pos)
 
         self.in_progress = True
 
