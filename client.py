@@ -570,6 +570,8 @@ def run(host: str, port: int):
                 game_over_msg = "Black Won!"
             elif game.score == '1/2-1/2':
                 game_over_msg = "Draw!"
+            else:
+                game_over_msg = "Game Disconnected"
         else:
             if game.score == '1-0':
                 game_over_msg = "You Won!" if game.white else "You Lost!"
@@ -577,6 +579,8 @@ def run(host: str, port: int):
                 game_over_msg = "You Lost!" if game.white else "You Won!"
             elif game.score == '1/2-1/2':
                 game_over_msg = "Draw!"
+            else:
+                game_over_msg = "Game Disconnected"
         
 
         game_over = game_over_font.render(game_over_msg, True, (255, 255, 255), (0, 0, 0))
