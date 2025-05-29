@@ -360,7 +360,7 @@ class Game:
         for i in range(8):
             for j in range(8):
                 coords = (j * self.cell_size[1], i * self.cell_size[0])
-                pygame.draw.rect(surface, self.color_light if (i + j) % 2 == 0 else self.color_dark, (coords, self.cell_size))
+                pygame.draw.rect(surface, self.color_dark if (i + j) % 2 == int(self.white) else self.color_light, (coords, self.cell_size))
 
                 piece = self.get_piece(i, j)
 
